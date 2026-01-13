@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200">
+  <style>
+    /* Define the drawing animation for the strokes */
+    @keyframes drawStroke {
+      from { stroke-dashoffset: 1000; }
+      to { stroke-dashoffset: 0; }
+    }
+    
+    /* Define the fade-in animation for the fills */
+    @keyframes fadeInFill {
+      from { fill-opacity: 0; }
+      to { fill-opacity: 1; }
+    }
+
+    /* Apply animations to the icon (diamonds) */
+    .icon-path {
+      fill: none;
+      stroke-width: 2;
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      animation: drawStroke 2s ease-in-out forwards;
+    }
+    .icon-path.red { stroke: #b6414c; }
+    .icon-path.gray { stroke: #4d5359; }
+
+    /* Apply animations to the main text (ABITAT) */
+    .text-path {
+      fill: none;
+      stroke: #4d5359;
+      stroke-width: 1.5;
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      animation: drawStroke 2s ease-in-out 1s forwards;
+    }
+    /* Special animation for the red dot in 'I' */
+    .i-dot-path {
+      fill: none;
+      stroke: #b6414c;
+      stroke-width: 1.5;
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      animation: drawStroke 1s ease-in-out 2.5s forwards;
+    }
+
+    /* Apply animations to the tagline text */
+    .tagline-path {
+      fill: none;
+      stroke: #4d5359;
+      stroke-width: 1;
+      stroke-dasharray: 1000;
+      stroke-dashoffset: 1000;
+      animation: drawStroke 2s ease-in-out 2s forwards;
+    }
+
+    /* Apply fill fade-in to all elements after strokes are drawn */
+    .fill-fade {
+      fill-opacity: 0;
+      animation: fadeInFill 1s ease-in-out 3.5s forwards;
+    }
+    .fill-red { fill: #b6414c; }
+    .fill-gray { fill: #4d5359; }
+    .fill-red-trans { fill: #b6414c; opacity: 0.7; } /* For the overlap */
+  </style>
+
+  <g transform="translate(75, 20) scale(0.6)">
+    <path class="icon-path red fill-fade fill-red" d="M100,0 L186.6,50 L100,100 L13.4,50 Z"/>
+    <path class="icon-path gray fill-fade fill-gray" d="M100,50 L186.6,100 L100,150 L13.4,100 Z"/>
+    <path class="icon-path red fill-fade fill-red-trans" d="M100,50 L143.3,75 L100,100 L56.7,75 Z"/>
+  </g>
+
+  <g transform="translate(25, 120) scale(0.8)">
+    <path class="text-path fill-fade fill-gray" d="M10,60 L35,0 L60,60 M20,35 L50,35"/> <path class="text-path fill-fade fill-gray" d="M75,0 L105,0 C120,0 125,10 125,20 C125,30 115,35 105,35 L75,35 L75,0 Z M75,35 L110,35 C130,35 135,45 135,55 C135,65 125,70 110,70 L75,70 L75,35 Z"/> <path class="i-dot-path fill-fade fill-red" d="M155,10 L165,0 L175,10 Z"/> <path class="text-path fill-fade fill-gray" d="M160,20 L160,70"/> <path class="text-path fill-fade fill-gray" d="M190,0 L240,0 M215,0 L215,70"/> <path class="text-path fill-fade fill-gray" d="M255,60 L280,0 L305,60 M265,35 L295,35"/> <path class="text-path fill-fade fill-gray" d="M320,0 L370,0 M345,0 L345,70"/> </g>
+
+  <g transform="translate(25, 170) scale(0.35)">
+    <path class="tagline-path fill-fade fill-gray" d="M20,30 C20,10 30,0 50,0 L80,0 M20,30 C20,50 30,60 50,60 L80,60"/> <path class="tagline-path fill-fade fill-gray" d="M100,30 C100,10 110,0 130,0 L150,0 C170,0 180,10 180,30 C180,50 170,60 150,60 L130,60 C110,60 100,50 100,30 Z"/> <path class="tagline-path fill-fade fill-gray" d="M200,0 L200,60 L240,0 L240,60"/> <path class="tagline-path fill-fade fill-gray" d="M260,10 C260,0 270,0 280,0 L300,0 C310,0 320,0 320,10 C320,20 310,30 290,30 L280,30 C260,30 250,40 250,50 C250,60 260,60 270,60 L300,60 C310,60 320,60 320,50"/> <path class="tagline-path fill-fade fill-gray" d="M340,0 L390,0 M365,0 L365,60"/> <path class="tagline-path fill-fade fill-gray" d="M410,0 L410,60 M410,0 L440,0 C460,0 470,10 470,20 C470,30 460,35 440,35 L410,35 M440,35 L470,60"/> <path class="tagline-path fill-fade fill-gray" d="M490,0 L490,50 C490,65 500,70 515,70 C530,70 540,65 540,50 L540,0"/> <path class="tagline-path fill-fade fill-gray" d="M560,30 C560,10 570,0 590,0 L610,0 M560,30 C560,50 570,60 590,60 L610,60"/> <path class="tagline-path fill-fade fill-gray" d="M630,0 L680,0 M655,0 L655,60"/> <path class="tagline-path fill-fade fill-gray" d="M700,0 L700,60 M690,0 L710,0 M690,60 L710,60"/> <path class="tagline-path fill-fade fill-gray" d="M730,30 C730,10 740,0 760,0 L780,0 C800,0 810,10 810,30 C810,50 800,60 780,60 L760,60 C740,60 730,50 730,30 Z"/> <path class="tagline-path fill-fade fill-gray" d="M830,0 L830,60 L870,0 L870,60"/> <path class="tagline-path fill-fade fill-gray" d="M910,10 C910,0 920,0 930,0 L950,0 C960,0 970,0 970,10 C970,20 960,30 940,30 L930,30 C910,30 900,40 900,50 C900,60 910,60 920,60 L950,60 C960,60 970,60 970,50"/> <path class="tagline-path fill-fade fill-gray" d="M990,30 C990,10 1000,0 1020,0 L1040,0 C1060,0 1070,10 1070,30 C1070,50 1060,60 1040,60 L1020,60 C1000,60 990,50 990,30 Z"/> <path class="tagline-path fill-fade fill-gray" d="M1090,0 L1090,60 L1130,60"/> <path class="tagline-path fill-fade fill-gray" d="M1150,0 L1150,50 C1150,65 1160,70 1175,70 C1190,70 1200,65 1200,50 L1200,0"/> <path class="tagline-path fill-fade fill-gray" d="M1220,0 L1270,0 M1245,0 L1245,60"/> <path class="tagline-path fill-fade fill-gray" d="M1290,0 L1290,60 M1280,0 L1300,0 M1280,60 L1300,60"/> <path class="tagline-path fill-fade fill-gray" d="M1320,30 C1320,10 1330,0 1350,0 L1370,0 C1390,0 1400,10 1400,30 C1400,50 1390,60 1370,60 L1350,60 C1330,60 1320,50 1320,30 Z"/> <path class="tagline-path fill-fade fill-gray" d="M1420,0 L1420,60 L1460,0 L1460,60"/> <path class="tagline-path fill-fade fill-gray" d="M1480,10 C1480,0 1490,0 1500,0 L1520,0 C1530,0 1540,0 1540,10 C1540,20 1530,30 1510,30 L1500,30 C1480,30 1470,40 1470,50 C1470,60 1480,60 1490,60 L1520,60 C1530,60 1540,60 1540,50"/> </g>
+</svg>
