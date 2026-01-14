@@ -450,6 +450,7 @@ export default function AECModelPlansPage() {
         body: JSON.stringify({}),
       });
       const json = await safeJson(res, url);
+      console.log("Respuesta", json)
       if (!res.ok) throw new Error(json?.error || "Error en sincronización.");
       
       const reloadRes = await fetch(`${apiBase}/plans/${pId}/plans`, { credentials: "include" });
