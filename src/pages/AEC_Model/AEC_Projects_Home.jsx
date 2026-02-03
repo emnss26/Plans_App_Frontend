@@ -34,7 +34,7 @@ export default function AECProjectsPage() {
         if (!result.success && result.error) {
           throw new Error(result.error);
         }
-        console.log('Project Data', result)
+        //console.log('Project Data', result)
         setProjects(result.data?.aecProjects || []);
         setError("");
       } catch (err) {
