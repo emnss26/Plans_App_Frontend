@@ -3,6 +3,10 @@ import { useCookies } from "react-cookie";
 import { useParams, useNavigate } from "react-router-dom";
 import { read, utils, writeFile } from "xlsx";
 
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import AlertsTable from "@/components/aec_model_components/AlertsTable";
+
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +31,7 @@ import {
   ChevronDown,
   Clock,
   FileDown,
+  FileText,
   FileUp,
   FolderOpen,
   Plus,
@@ -41,6 +46,9 @@ import AbitatLogoLoader from "@/components/general_component/AbitatLogoLoader";
 import SheetsTable from "@/components/aec_model_components/SheetsTable";
 import SelectFolderModal from "@/components/aec_model_components/SelectFolderModal";
 import SelectModelsModal from "@/components/aec_model_components/SelectModelModal";
+
+
+import autoTable from "jspdf-autotable";
 
 const backendUrl = import.meta.env.VITE_API_BACKEND_BASE_URL;
 
@@ -118,37 +126,41 @@ export default function AECModelPlansPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
 
+  const [alerts, setAlerts] = useState([]);
+
   const altProjectId = sessionStorage.getItem("altProjectId");
   const projectName = sessionStorage.getItem("projectName");
 
   const [viewMode, setViewMode] = useState("table");
 
-  // Estados de Datos (Carga diferida)
+  // Estados de Datos
   const [models, setModels] = useState([]);
   const [folderTree, setFolderTree] = useState([]);
   
-  // Estados de Selección (Se cargan al inicio)
   const [selectedModelsIds, setSelectedModelsIds] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState(null);
 
   const [plans, setPlans] = useState([]);
   
-  // Estados de UI (Modales y Carga)
   const [modalModelsOpen, setModalModelsOpen] = useState(false);
   const [modalFoldersOpen, setModalFoldersOpen] = useState(false);
   
   const [error, setError] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // Estados de carga granulares
   const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
 
   const fileInputRef = useRef(null);
+  const reportRef = useRef(null); 
 
   const apiBase = (backendUrl || "").replace(/\/$/, "");
   const pId = encodeURIComponent(projectId || "");
+  
+  const TABLOID_LANDSCAPE_MM = [431.8, 279.4];
+  const fmtDMY = (iso) => isoToDMY(iso || "");
+
 
   const safeJson = async (res, urlForMsg) => {
     const ctype = res.headers.get("content-type") || "";
@@ -172,7 +184,18 @@ export default function AECModelPlansPage() {
     return { total, completed, inReview, pending, completionRate };
   }, [plans]);
 
-  // 1. CARGA INICIAL (Solo Configuración Guardada y Tabla de Planos)
+  const loadAlerts = async () => {
+    try {
+      const r = await fetch(`${apiBase}/plans/${pId}/alerts`, { credentials: "include" });
+      const j = await safeJson(r, "alerts");
+      setAlerts(j.data?.alerts || []);
+    } catch (e) {
+      console.error("Error cargando alertas:", e);
+      setAlerts([]);
+    }
+  };
+
+  // 1. CARGA INICIAL
   useEffect(() => {
     const initData = async () => {
       setIsLoadingInitial(true);
@@ -190,6 +213,8 @@ export default function AECModelPlansPage() {
         const loaded = plansJson.data?.plans ?? [];
         setPlans(loaded.length === 0 ? Array.from({ length: 10 }, emptyPlan) : loaded);
         
+        await loadAlerts();
+
       } catch (err) {
         console.error("Error carga inicial:", err);
         if (plans.length === 0) setPlans(Array.from({ length: 10 }, emptyPlan));
@@ -201,27 +226,17 @@ export default function AECModelPlansPage() {
     if (pId) initData();
   }, [apiBase, pId]);
 
-
-  // 2. HANDLERS "LAZY LOADING" (MODIFICADOS CON TOAST)
-
-  // Cargar Modelos (Ahora con Toast y Loading State)
+  // 2. HANDLERS
   const handleOpenModelsModal = async () => {
     setModalModelsOpen(true);
-    
     if (models.length === 0) {
         setLoadingModels(true);
-        // Toast de carga para modelos
         const tId = toast.loading("Cargando lista de modelos..."); 
-        
         try {
             const r = await fetch(`${apiBase}/aec/${pId}/graphql-models`, { credentials: "include" });
             const j = await safeJson(r, "graphql-models");
-            
             if(!j.success && j.error) throw new Error(j.error);
-
             setModels(j.data?.models || []);
-            
-            // Actualizamos el toast a éxito
             toast.success("Modelos cargados", { id: tId });
         } catch (e) {
             console.error("Error cargando modelos:", e);
@@ -232,29 +247,22 @@ export default function AECModelPlansPage() {
     }
   };
 
-  // Cargar Carpetas (REST / Data Management)
   const handleOpenFoldersModal = async () => {
     setModalFoldersOpen(true);
-    
     if (folderTree.length === 0) {
         if (!altProjectId) {
             toast.error("Falta ID de Data Management.");
             return;
         }
-
         setLoadingTree(true);
-        const tId = toast.loading("Escaneando estructura de carpetas... (esto puede demorar)");
-        
+        const tId = toast.loading("Escaneando estructura de carpetas...");
         try {
             const endpoint = `${apiBase}/dm/project-folders?dmId=${altProjectId}`;
             const response = await fetch(endpoint, { credentials: "include" });
             const result = await safeJson(response, endpoint);
-            
             if (!result.success) throw new Error(result.message);
-
             setFolderTree(result.data.folderTree || []);
             toast.success("Estructura cargada.", { id: tId });
-
         } catch (err) {
             console.error("Error cargando árbol DM:", err);
             toast.error("Error al cargar carpetas.", { id: tId });
@@ -264,7 +272,6 @@ export default function AECModelPlansPage() {
     }
   };
 
-  // ... (Resto de funciones handle igual) ...
   const handleAddRow = () => setPlans((prev) => [...prev, emptyPlan()]);
   
   const handleDeleteRow = async (rowIndex) => {
@@ -282,7 +289,6 @@ export default function AECModelPlansPage() {
     }
     setPlans((prev) => prev.filter((_, i) => i !== rowIndex));
     if (deleteOk) toast.success("Plano eliminado.");
-    else toast.warning("Plano eliminado localmente, pero error en servidor.");
   };
 
   const handleClickImport = () => fileInputRef.current?.click();
@@ -457,6 +463,8 @@ export default function AECModelPlansPage() {
       const reloadJson = await safeJson(reloadRes, "reload");
       setPlans(reloadJson.data?.plans || []);
 
+      await loadAlerts();
+
       toast.success("Sincronización completada.", { id: tId });
     } catch (e) {
       console.error(e);
@@ -481,9 +489,175 @@ export default function AECModelPlansPage() {
     );
   }
 
+  const fetchAsDataURL = async (url) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`No pude cargar logo: ${url}`);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  };
+  
+  const loadLogo = async () => {
+    const candidates = ["/Abitat_img.png", "/Abitat_img.jpg", "/Abitat_img.jpeg", "/Abitat_img.webp"];
+    for (const u of candidates) {
+      try { return await fetchAsDataURL(u); } catch (_) {}
+    }
+    return null; // si no existe, seguimos sin logo
+  };
+
+  
+  // --- FUNCIÓN EXPORTAR PDF (TABLA, TEXTO NÍTIDO, MULTIPÁGINA, CON LOGO) ---
+  const handleExportPDF = async () => {
+    try {
+      const tId = toast.loading("Generando PDF...");
+
+      // Si estás en dashboard, por ahora bloquea o implementa aparte.
+      if (viewMode !== "table") {
+        toast.info("Exportación PDF disponible solo en 'Tabla' por ahora.");
+        toast.dismiss(tId);
+        return;
+      }
+
+      const logo = await loadLogo(); // puede ser null
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: TABLOID_LANDSCAPE_MM,
+        compress: true,
+      });
+
+      const margin = 6;
+      const headerTop = 10;
+
+      // Header
+      const title = `Proyecto: ${projectName || "Proyecto"}`;
+      const sub = `Reporte de Planos • ${new Date().toLocaleString("es-MX")}`;
+
+      // Columnas (hasta Progreso, SIN Acciones)
+      const columns = [
+        "#",
+        "N° Plano",
+        "Nombre",
+        "Rev.",
+        "Fecha Rev.",
+        "Gen. Programada",
+        "Gen. Real",
+        "Ver.",
+        "Últ. Versión",
+        "Rev. Programada",
+        "Aprob.",
+        "Rev. Real",
+        "Últ. Flujo",
+        "Estado Flujo",
+        "Emisión Prog.",
+        "Emisión Real",
+        "Actualizado",
+        "Conjunto",
+        "Progreso",
+      ];
+
+      // Filas
+      const rows = (plans || [])
+        .filter((r) => (r.name || "").trim() || (r.number || "").trim())
+        .map((r, i) => {
+          const hasIssue = !!(r.actualIssueDate || r.actual_issue_date);
+          const hasReview = !!(r.actualReviewDate || r.actual_review_date);
+          const hasGen = !!(r.actualGenDate || r.actual_gen_date);
+
+          const pct = hasIssue ? 100 : hasReview ? 66 : hasGen ? 33 : 0;
+          const progressLabel = pct >= 100 ? "Completado" : pct >= 66 ? "En revisión" : pct >= 33 ? "Generado" : "Pendiente";
+
+          const approval = (r.hasApprovalFlow ?? r.has_approval_flow) ? "✓" : "—";
+
+          return [
+            i + 1,
+            r.number || r.sheet_number || "",
+            r.name || r.sheet_name || "",
+            r.currentRevision || r.current_revision || "",
+            fmtDMY(r.currentRevisionDate || r.current_revision_date || ""),
+            fmtDMY(r.plannedGenDate || r.planned_gen_date || ""),
+            fmtDMY(r.actualGenDate || r.actual_gen_date || ""),
+            r.docsVersion || r.docs_version_number || "",
+            fmtDMY(r.docsVersionDate || r.docs_last_modified || ""),
+            fmtDMY(r.plannedReviewDate || r.planned_review_date || ""),
+            approval,
+            fmtDMY(r.actualReviewDate || r.actual_review_date || ""),
+            fmtDMY(r.lastReviewDate || r.latest_review_date || ""),
+            r.lastReviewStatus || r.latest_review_status || "—",
+            fmtDMY(r.plannedIssueDate || r.planned_issue_date || ""),
+            fmtDMY(r.actualIssueDate || r.actual_issue_date || ""),
+            fmtDMY(r.issueUpdatedAt || r.sheet_updated_at || ""),
+            r.issueVersionSetName || r.sheet_version_set || "",
+            `${progressLabel} (${pct}%)`,
+          ];
+        });
+
+      // Ajuste: si no hay filas, metemos una vacía para no romper
+      const safeRows = rows.length ? rows : [[ "—","—","—","—","—","—","—","—","—","—","—","—","—","—","—","—","—","—","—" ]];
+
+      autoTable(pdf, {
+        head: [columns],
+        body: safeRows,
+        theme: "grid",
+        margin: { left: margin, right: margin, top: headerTop + 12, bottom: margin },
+        styles: {
+          fontSize: 7,
+          cellPadding: 1.2,
+          overflow: "linebreak",
+          valign: "middle",
+        },
+        headStyles: {
+          fontStyle: "bold",
+        },
+        didDrawPage: () => {
+          // Logo
+          let x = margin;
+          if (logo) {
+            // auto-detect tipo: si es PNG/JPG igual funciona, jsPDF usa el string base64
+            // Si el logo no es PNG pero lo pasas como "PNG", normalmente también funciona; si falla, dime extensión real.
+            pdf.addImage(logo, "PNG", margin, 6, 24, 10);
+            x = margin + 28;
+          }
+
+          // Título
+          pdf.setFontSize(12);
+          pdf.text(title, x, headerTop);
+          pdf.setFontSize(9);
+          pdf.text(sub, x, headerTop + 5);
+
+          // Paginación
+          const pageW = pdf.internal.pageSize.getWidth();
+          pdf.setFontSize(9);
+          pdf.text(`Página ${pdf.getNumberOfPages()}`, pageW - margin, headerTop, { align: "right" });
+        },
+      });
+
+      pdf.save(`Reporte_Planos_${projectName || "Proyecto"}.pdf`);
+      toast.success("PDF generado con éxito.", { id: tId });
+    } catch (e) {
+      console.error(e);
+      toast.error("Error al generar PDF.", { description: e?.message });
+    }
+  };
+
+
   return (
     <AppLayout>
-      <div className="mx-auto max-w-[1800px] space-y-6 p-6">
+      {/* Contenedor Principal de Reporte 
+        - ref={reportRef}: Para saber qué capturar.
+        - bg-white: Fondo blanco para el PDF.
+        - w-fit / min-w-full: Asegura que si la tabla es ancha, el contenedor crezca y no recorte.
+      */}
+      <div
+        id="pdf-report-root"
+        ref={reportRef}
+        className="mx-auto max-w-[1800px] w-fit min-w-full space-y-6 p-6 bg-white"
+      >
         <div className="flex flex-col justify-between gap-4 border-b border-border pb-6 lg:flex-row lg:items-center">
           <div>
             <div className="flex items-center gap-3">
@@ -505,12 +679,25 @@ export default function AECModelPlansPage() {
                  <BarChart3 className="h-3.5 w-3.5" /> Dashboard
                </Button>
              </div>
+             <div className="flex items-center rounded-lg border border-border bg-muted/50 p-1">
+             <Button
+                variant={viewMode === "alerts" ? "default" : "ghost"}
+                size="sm"
+                className={`h-8 gap-2 text-xs ${viewMode === "alerts" ? "bg-white text-black shadow-sm" : "text-muted-foreground hover:bg-transparent"}`}
+                onClick={() => setViewMode("alerts")}
+              >
+                <AlertCircle className="h-3.5 w-3.5" />
+                Alertas
+                <Badge variant="secondary" className="ml-1 h-5 px-1 text-[10px]">{alerts.length}</Badge>
+              </Button>
+             </div>
           </div>
         </div>
 
         {viewMode === "table" ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-3">
+            {/* data-html2canvas-ignore hace que esta barra NO salga en el PDF */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/30 p-3" data-html2canvas-ignore="true">
               <div className="flex items-center gap-2">
                 <TooltipProvider>
                   
@@ -556,8 +743,20 @@ export default function AECModelPlansPage() {
                   <DropdownMenuContent align="start">
                     <DropdownMenuItem onClick={handleClickImport}><FileUp className="mr-2 h-4 w-4" /> Excel (.xlsx)</DropdownMenuItem>
                   </DropdownMenuContent>
+
                 </DropdownMenu>
                 <Button variant="ghost" size="sm" className="gap-2 hover:bg-background" onClick={handleExportExcel}><FileDown className="h-4 w-4 text-emerald-600" /></Button>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                             <Button variant="ghost" size="sm" className="gap-2 hover:bg-background" onClick={handleExportPDF}>
+                                <FileText className="h-4 w-4 text-red-600" />
+                             </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Exportar PDF (Doble Carta)</TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+              
               </div>
 
               <div className="ml-auto flex items-center gap-2">
@@ -569,11 +768,22 @@ export default function AECModelPlansPage() {
             </div>
 
             {error && <div className="flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-700"><AlertCircle className="h-4 w-4" /> {error}</div>}
-
+            
             <SheetsTable data={plans} onEdit={handleEdit} onDeleteRow={handleDeleteRow} />
           </>
+        ) : viewMode === "alerts" ? (
+          <div className="bg-white p-4">
+            <AlertsTable data={alerts} />
+          </div>
         ) : (
-          <AnalyticsDashboard data={plans} />
+          <div className="bg-white p-4">
+            <AnalyticsDashboard data={plans} />
+            <div className="mt-4 flex justify-end" data-html2canvas-ignore="true">
+              <Button variant="outline" size="sm" onClick={handleExportPDF} className="gap-2">
+                <FileText className="h-4 w-4 text-red-600" /> Descargar Reporte PDF
+              </Button>
+            </div>
+          </div>
         )}
 
         <SelectModelsModal
@@ -583,7 +793,21 @@ export default function AECModelPlansPage() {
           onClose={() => setModalModelsOpen(false)}
           onSave={async (ids) => {
             const url = `${apiBase}/aec/${pId}/graphql-models/set-selection`;
-            await fetch(url, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ modelIds: ids }) });
+          
+            const modelMeta = (models || [])
+              .filter((m) => ids.includes(m.id))
+              .map((m) => ({
+                id: m.id,
+                name: m.name || m.displayName || m.title || m.fileName || "",
+              }));
+          
+            await fetch(url, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ modelIds: ids, modelMeta }),
+            });
+          
             setSelectedModelsIds(ids);
             setModalModelsOpen(false);
           }}
