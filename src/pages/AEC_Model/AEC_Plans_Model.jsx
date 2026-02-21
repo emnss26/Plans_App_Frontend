@@ -121,6 +121,40 @@ const isGenProg = (h) => ["fecha gen. (programada)", "fecha de generación (prog
 const isRevProg = (h) => ["rev. técnica (programada)", "revisión técnica (programada)", "revision tecnica (programada)", "planned review date"].includes(norm(h));
 const isEmiProg = (h) => ["emisión (programada)", "emision (programada)", "emisión a construcción (programada)", "planned issue date"].includes(norm(h));
 
+const TABLE_COLUMN_ORDER = [
+  "index",
+  "number",
+  "name",
+  "currentRevision",
+  "currentRevisionDate",
+  "plannedGenDate",
+  "actualGenDate",
+  "docsVersion",
+  "docsVersionDate",
+  "plannedReviewDate",
+  "hasApprovalFlow",
+  "actualReviewDate",
+  "lastReviewDate",
+  "lastReviewStatus",
+  "plannedIssueDate",
+  "actualIssueDate",
+  "issueUpdatedAt",
+  "issueVersionSetName",
+  "progress",
+  "actions",
+];
+
+const CONTROL_INFO_COLUMN_ORDER = [
+  "number",
+  "name",
+  "plannedGenDate",
+  "actualGenDate",
+  "plannedReviewDate",
+  "actualReviewDate",
+  "plannedIssueDate",
+  "actualIssueDate",
+];
+
 // --- Componente Principal ---
 export default function AECModelPlansPage() {
   const [cookies] = useCookies(["access_token"]);
@@ -153,6 +187,8 @@ export default function AECModelPlansPage() {
   const [loadingModels, setLoadingModels] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [visibleTableColumns, setVisibleTableColumns] = useState(() => [...TABLE_COLUMN_ORDER]);
+  const [visibleControlColumns, setVisibleControlColumns] = useState(() => [...CONTROL_INFO_COLUMN_ORDER]);
 
   const fileInputRef = useRef(null);
   const reportRef = useRef(null); 
@@ -737,16 +773,29 @@ export default function AECModelPlansPage() {
           return idx >= 0 ? idx : null;
         };
 
+        const controlInfoExportColumns = [
+          { id: "number", label: "N. Plano", getValue: (row) => row.number || "-", style: { cellWidth: 20 } },
+          { id: "name", label: "Nombre", getValue: (row) => row.name || "-", style: { cellWidth: 40 } },
+          { id: "plannedGenDate", label: "Gen. Prog.", getValue: (row) => formatDate(row.plannedGenDate), style: { cellWidth: 16, halign: "center" } },
+          { id: "actualGenDate", label: "Gen. Real", getValue: (row) => formatDate(row.actualGenDate), style: { cellWidth: 16, halign: "center" } },
+          { id: "plannedReviewDate", label: "Rev. Prog.", getValue: (row) => formatDate(row.plannedReviewDate), style: { cellWidth: 16, halign: "center" } },
+          { id: "actualReviewDate", label: "Rev. Real", getValue: (row) => formatDate(row.actualReviewDate), style: { cellWidth: 16, halign: "center" } },
+          { id: "plannedIssueDate", label: "Em. Prog.", getValue: (row) => formatDate(row.plannedIssueDate), style: { cellWidth: 16, halign: "center" } },
+          { id: "actualIssueDate", label: "Em. Real", getValue: (row) => formatDate(row.actualIssueDate), style: { cellWidth: 16, halign: "center" } },
+        ];
+
+        const activeControlInfoColumns = controlInfoExportColumns.filter((col) =>
+          visibleControlColumns.includes(col.id)
+        );
+
+        if (activeControlInfoColumns.length === 0) {
+          toast.warning("No hay columnas visibles en Control para exportar.", { id: tId });
+          return;
+        }
+
         const fixedColumns = [
-          "#",
-          "N. Plano",
-          "Nombre",
-          "Gen. Prog.",
-          "Gen. Real",
-          "Rev. Prog.",
-          "Rev. Real",
-          "Em. Prog.",
-          "Em. Real",
+          { id: "index", label: "#", getValue: (_row, index) => index + 1, style: { cellWidth: 10, halign: "center" } },
+          ...activeControlInfoColumns,
         ];
 
         const monthHeader = [
@@ -763,7 +812,7 @@ export default function AECModelPlansPage() {
         ];
 
         const weekHeader = [
-          ...fixedColumns.map((label) => ({ content: label, styles: { halign: "center" } })),
+          ...fixedColumns.map((column) => ({ content: column.label, styles: { halign: "center" } })),
           ...weeks.map((week) => {
             const sdd = String(week.start.getDate()).padStart(2, "0");
             const smm = String(week.start.getMonth() + 1).padStart(2, "0");
@@ -782,34 +831,16 @@ export default function AECModelPlansPage() {
             return "";
           });
 
-          return [
-            index + 1,
-            row.number || "-",
-            row.name || "-",
-            formatDate(row.plannedGenDate),
-            formatDate(row.actualGenDate),
-            formatDate(row.plannedReviewDate),
-            formatDate(row.actualReviewDate),
-            formatDate(row.plannedIssueDate),
-            formatDate(row.actualIssueDate),
-            ...weekCells,
-          ];
+          return [...fixedColumns.map((column) => column.getValue(row, index)), ...weekCells];
         });
 
-        const safeBody = body.length ? body : [["-", "-", "-", "-", "-", "-", "-", "-", "-", ...weeks.map(() => "")]];
+        const safeBody = body.length ? body : [[...fixedColumns.map(() => "-"), ...weeks.map(() => "")]];
         const fixedCount = fixedColumns.length;
         const repeatCols = Array.from({ length: fixedCount }, (_, i) => i);
-        const columnStyles = {
-          0: { cellWidth: 10, halign: "center" },
-          1: { cellWidth: 20 },
-          2: { cellWidth: 40 },
-          3: { cellWidth: 16, halign: "center" },
-          4: { cellWidth: 16, halign: "center" },
-          5: { cellWidth: 16, halign: "center" },
-          6: { cellWidth: 16, halign: "center" },
-          7: { cellWidth: 16, halign: "center" },
-          8: { cellWidth: 16, halign: "center" },
-        };
+        const columnStyles = {};
+        fixedColumns.forEach((column, idx) => {
+          columnStyles[idx] = column.style;
+        });
         weeks.forEach((_, idx) => {
           columnStyles[idx + fixedCount] = { cellWidth: 8, halign: "center" };
         });
@@ -840,30 +871,41 @@ export default function AECModelPlansPage() {
         return;
       }
 
-      const columns = [
-        "#",
-        "N. Plano",
-        "Nombre",
-        "Rev.",
-        "Fecha Rev.",
-        "Gen. Programada",
-        "Gen. Real",
-        "Ver.",
-        "Ult. Version",
-        "Rev. Programada",
-        "Aprob.",
-        "Rev. Real",
-        "Ult. Flujo",
-        "Estado Flujo",
-        "Emision Prog.",
-        "Emision Real",
-        "Actualizado",
-        "Conjunto",
-        "Progreso",
+      const tableExportColumns = [
+        { id: "index", label: "#", getValue: (_row, index) => index + 1 },
+        { id: "number", label: "N. Plano", getValue: (row) => row.number || row.sheet_number || "" },
+        { id: "name", label: "Nombre", getValue: (row) => row.name || row.sheet_name || "" },
+        { id: "currentRevision", label: "Rev.", getValue: (row) => row.currentRevision || row.current_revision || "" },
+        { id: "currentRevisionDate", label: "Fecha Rev.", getValue: (row) => fmtDMY(row.currentRevisionDate || row.current_revision_date || "") },
+        { id: "plannedGenDate", label: "Gen. Programada", getValue: (row) => fmtDMY(row.plannedGenDate || row.planned_gen_date || "") },
+        { id: "actualGenDate", label: "Gen. Real", getValue: (row) => fmtDMY(row.actualGenDate || row.actual_gen_date || "") },
+        { id: "docsVersion", label: "Ver.", getValue: (row) => row.docsVersion || row.docs_version_number || "" },
+        { id: "docsVersionDate", label: "Ult. Version", getValue: (row) => fmtDMY(row.docsVersionDate || row.docs_last_modified || "") },
+        { id: "plannedReviewDate", label: "Rev. Programada", getValue: (row) => fmtDMY(row.plannedReviewDate || row.planned_review_date || "") },
+        { id: "hasApprovalFlow", label: "Aprob.", getValue: (_row, _index, context) => context.approval },
+        { id: "actualReviewDate", label: "Rev. Real", getValue: (row) => fmtDMY(row.actualReviewDate || row.actual_review_date || "") },
+        { id: "lastReviewDate", label: "Ult. Flujo", getValue: (row) => fmtDMY(row.lastReviewDate || row.latest_review_date || "") },
+        { id: "lastReviewStatus", label: "Estado Flujo", getValue: (row) => row.lastReviewStatus || row.latest_review_status || "-" },
+        { id: "plannedIssueDate", label: "Emision Prog.", getValue: (row) => fmtDMY(row.plannedIssueDate || row.planned_issue_date || "") },
+        { id: "actualIssueDate", label: "Emision Real", getValue: (row) => fmtDMY(row.actualIssueDate || row.actual_issue_date || "") },
+        { id: "issueUpdatedAt", label: "Actualizado", getValue: (row) => fmtDMY(row.issueUpdatedAt || row.sheet_updated_at || "") },
+        { id: "issueVersionSetName", label: "Conjunto", getValue: (row) => row.issueVersionSetName || row.sheet_version_set || "" },
+        { id: "progress", label: "Progreso", getValue: (_row, _index, context) => `${context.progressLabel} (${context.pct}%)` },
       ];
 
+      const activeTableColumns = tableExportColumns.filter((column) =>
+        visibleTableColumns.includes(column.id)
+      );
+
+      if (activeTableColumns.length === 0) {
+        toast.warning("No hay columnas visibles en Tabla para exportar.", { id: tId });
+        return;
+      }
+
+      const columns = activeTableColumns.map((column) => column.label);
+
       const rows = (plans || [])
-        .filter((r) => (r.name || "").trim() || (r.number || "").trim())
+        .filter((r) => (r.name || r.sheet_name || "").trim() || (r.number || r.sheet_number || "").trim())
         .map((r, i) => {
           const hasIssue = !!(r.actualIssueDate || r.actual_issue_date);
           const hasReview = !!(r.actualReviewDate || r.actual_review_date);
@@ -871,28 +913,9 @@ export default function AECModelPlansPage() {
           const pct = hasIssue ? 100 : hasReview ? 66 : hasGen ? 33 : 0;
           const progressLabel = pct >= 100 ? "Completado" : pct >= 66 ? "En revision" : pct >= 33 ? "Generado" : "Pendiente";
           const approval = (r.hasApprovalFlow ?? r.has_approval_flow) ? "SI" : "-";
+          const context = { pct, progressLabel, approval };
 
-          return [
-            i + 1,
-            r.number || r.sheet_number || "",
-            r.name || r.sheet_name || "",
-            r.currentRevision || r.current_revision || "",
-            fmtDMY(r.currentRevisionDate || r.current_revision_date || ""),
-            fmtDMY(r.plannedGenDate || r.planned_gen_date || ""),
-            fmtDMY(r.actualGenDate || r.actual_gen_date || ""),
-            r.docsVersion || r.docs_version_number || "",
-            fmtDMY(r.docsVersionDate || r.docs_last_modified || ""),
-            fmtDMY(r.plannedReviewDate || r.planned_review_date || ""),
-            approval,
-            fmtDMY(r.actualReviewDate || r.actual_review_date || ""),
-            fmtDMY(r.lastReviewDate || r.latest_review_date || ""),
-            r.lastReviewStatus || r.latest_review_status || "-",
-            fmtDMY(r.plannedIssueDate || r.planned_issue_date || ""),
-            fmtDMY(r.actualIssueDate || r.actual_issue_date || ""),
-            fmtDMY(r.issueUpdatedAt || r.sheet_updated_at || ""),
-            r.issueVersionSetName || r.sheet_version_set || "",
-            `${progressLabel} (${pct}%)`,
-          ];
+          return activeTableColumns.map((column) => column.getValue(r, i, context));
         });
 
       const safeRows = rows.length ? rows : [columns.map(() => "-")];
@@ -1050,7 +1073,12 @@ export default function AECModelPlansPage() {
 
             {error && <div className="flex items-center gap-2 rounded-lg border border-red-100 bg-red-50 p-4 text-sm font-medium text-red-700"><AlertCircle className="h-4 w-4" /> {error}</div>}
 
-            <SheetsTable data={plans} onEdit={handleEdit} onDeleteRow={handleDeleteRow} />
+            <SheetsTable
+              data={plans}
+              onEdit={handleEdit}
+              onDeleteRow={handleDeleteRow}
+              onVisibleColumnsChange={setVisibleTableColumns}
+            />
           </>
         ) : viewMode === "control" ? (
           <div className="bg-white p-4">
@@ -1060,7 +1088,7 @@ export default function AECModelPlansPage() {
                 {isExportingPdf ? "Generando..." : "Descargar Reporte PDF"}
               </Button>
             </div>
-            <ControlTable data={plans} />
+            <ControlTable data={plans} onVisibleColumnsChange={setVisibleControlColumns} />
           </div>
         ) : viewMode === "alerts" ? (
           <div className="bg-white p-4">

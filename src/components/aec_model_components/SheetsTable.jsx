@@ -262,6 +262,7 @@ export default function SheetsTable({
   data = [],
   onEdit = () => { },
   onDeleteRow = () => { },
+  onVisibleColumnsChange = () => { },
 }) {
   const [rows, setRows] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -336,6 +337,13 @@ export default function SheetsTable({
       return next;
     });
   }, []);
+
+  useEffect(() => {
+    const orderedVisible = COLUMN_DEFINITIONS
+      .filter((column) => visibleColumns.has(column.id))
+      .map((column) => column.id);
+    onVisibleColumnsChange(orderedVisible);
+  }, [visibleColumns, onVisibleColumnsChange]);
 
   const getOriginalIndex = (rowObject) => rows.indexOf(rowObject);
 

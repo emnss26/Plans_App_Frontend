@@ -1,11 +1,20 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Columns3, Eye, EyeOff } from "lucide-react";
 
 const INFO_COLUMNS = [
   { key: "number", label: "N. Plano", width: "min-w-[120px] w-[120px]" },
@@ -43,6 +52,7 @@ const MONTHS_ES = [
 ];
 
 const ROW_H = "h-10";
+const HEADER_SECOND_ROW_H = "h-[38px]";
 const WEEK_COL_W = 56;
 
 const toMiddayDate = (year, month, day) => {
@@ -140,6 +150,7 @@ function WeekHeaderCell({ week, isCurrentWeek }) {
   return (
     <th
       className={cn(
+        HEADER_SECOND_ROW_H,
         "border-r border-border px-0.5 py-1 text-center align-middle font-normal",
         isCurrentWeek ? "bg-blue-100" : "bg-muted/20"
       )}
@@ -208,13 +219,118 @@ function CalendarWeekCell({
   );
 }
 
-export default function ControlTable({ data = [] }) {
+function ColumnVisibilitySelector({
+  columns,
+  visibleColumns,
+  onToggle,
+  onShowAll,
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed">
+          <Columns3 className="h-4 w-4" />
+          <span className="hidden sm:inline">Columnas</span>
+          <Badge variant="secondary" className="h-5 px-1 text-[10px]">
+            {visibleColumns.size}
+          </Badge>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="end">
+        <div className="border-b bg-muted/20 p-3">
+          <h4 className="text-sm font-medium">Visibilidad de columnas</h4>
+        </div>
+        <div className="max-h-[280px] overflow-y-auto p-2">
+          {columns.map((column) => {
+            const checked = visibleColumns.has(column.key);
+            const disableUncheck = checked && visibleColumns.size === 1;
+            return (
+              <div
+                key={column.key}
+                className={cn(
+                  "flex items-center gap-2 rounded px-2 py-1.5 hover:bg-accent",
+                  disableUncheck && "opacity-70"
+                )}
+              >
+                <Checkbox
+                  checked={checked}
+                  id={`control-col-${column.key}`}
+                  disabled={disableUncheck}
+                  onCheckedChange={() => onToggle(column.key)}
+                />
+                <label
+                  htmlFor={`control-col-${column.key}`}
+                  className={cn(
+                    "flex-1 cursor-pointer text-sm",
+                    disableUncheck && "cursor-not-allowed"
+                  )}
+                >
+                  {column.label}
+                </label>
+                {checked ? (
+                  <Eye className="ml-auto h-3 w-3 text-muted-foreground" />
+                ) : (
+                  <EyeOff className="ml-auto h-3 w-3 text-muted-foreground/50" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex justify-end border-t bg-muted/20 p-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            disabled={visibleColumns.size === columns.length}
+            onClick={onShowAll}
+          >
+            Mostrar Todo
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export default function ControlTable({ data = [], onVisibleColumnsChange = () => { } }) {
   const scrollRef = useRef(null);
 
   const rows = useMemo(() => {
     if (!Array.isArray(data)) return [];
     return data.map(normalizeRow);
   }, [data]);
+  const [visibleColumns, setVisibleColumns] = useState(
+    () => new Set(INFO_COLUMNS.map((column) => column.key))
+  );
+
+  const visibleInfoColumns = useMemo(
+    () => INFO_COLUMNS.filter((column) => visibleColumns.has(column.key)),
+    [visibleColumns]
+  );
+
+  useEffect(() => {
+    const orderedVisible = INFO_COLUMNS
+      .filter((column) => visibleColumns.has(column.key))
+      .map((column) => column.key);
+    onVisibleColumnsChange(orderedVisible);
+  }, [visibleColumns, onVisibleColumnsChange]);
+
+  const toggleColumn = useCallback((columnKey) => {
+    setVisibleColumns((prev) => {
+      const next = new Set(prev);
+      if (next.has(columnKey)) {
+        if (next.size === 1) return prev;
+        next.delete(columnKey);
+      } else {
+        next.add(columnKey);
+      }
+      return next;
+    });
+  }, []);
+
+  const showAllColumns = useCallback(() => {
+    setVisibleColumns(new Set(INFO_COLUMNS.map((column) => column.key)));
+  }, []);
 
   const weeks = useMemo(() => {
     const allDates = [];
@@ -325,6 +441,85 @@ export default function ControlTable({ data = [] }) {
     return `${formatDate(weeks[0].startDate)} - ${formatDate(weeks[weeks.length - 1].endDate)}`;
   }, [weeks]);
 
+  const renderInfoCell = (row, columnKey) => {
+    switch (columnKey) {
+      case "number":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="min-w-[120px] whitespace-nowrap border-r border-border px-2 font-mono font-medium text-foreground"
+          >
+            {row.number || "-"}
+          </td>
+        );
+      case "name":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="max-w-[220px] truncate border-r border-border px-2 text-foreground"
+          >
+            <span title={row.name || ""}>{row.name || "-"}</span>
+          </td>
+        );
+      case "plannedGenDate":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="whitespace-nowrap border-r border-border px-2 text-muted-foreground"
+          >
+            {formatDate(row.plannedGenDate)}
+          </td>
+        );
+      case "actualGenDate":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="whitespace-nowrap border-r border-border px-2 text-muted-foreground"
+          >
+            {formatDate(row.actualGenDate)}
+          </td>
+        );
+      case "plannedReviewDate":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="whitespace-nowrap border-r border-border px-2 text-muted-foreground"
+          >
+            {formatDate(row.plannedReviewDate)}
+          </td>
+        );
+      case "actualReviewDate":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="whitespace-nowrap border-r border-border px-2 text-muted-foreground"
+          >
+            {formatDate(row.actualReviewDate)}
+          </td>
+        );
+      case "plannedIssueDate":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="whitespace-nowrap border-r border-border px-2 font-medium text-blue-700"
+          >
+            {formatDate(row.plannedIssueDate)}
+          </td>
+        );
+      case "actualIssueDate":
+        return (
+          <td
+            key={`${row.rowKey}-${columnKey}`}
+            className="whitespace-nowrap border-r border-border px-2 font-medium text-emerald-700"
+          >
+            {formatDate(row.actualIssueDate)}
+          </td>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <TooltipProvider delayDuration={120}>
       <div className="w-full rounded-lg border border-border bg-card shadow-sm">
@@ -334,6 +529,12 @@ export default function ControlTable({ data = [] }) {
             <p className="text-[11px] text-muted-foreground">Rango de calendario: {rangeLabel}</p>
           </div>
           <div className="flex items-center gap-4">
+            <ColumnVisibilitySelector
+              columns={INFO_COLUMNS}
+              visibleColumns={visibleColumns}
+              onToggle={toggleColumn}
+              onShowAll={showAllColumns}
+            />
             <div className="flex items-center gap-1.5">
               <span className="inline-flex h-4 w-4 items-center justify-center rounded-sm bg-blue-500 text-[8px] font-bold text-card">
                 X
@@ -361,18 +562,19 @@ export default function ControlTable({ data = [] }) {
               <thead>
                 <tr>
                   <th
-                    colSpan={INFO_COLUMNS.length}
+                    colSpan={visibleInfoColumns.length}
                     className="h-7 border-b border-border bg-muted/40 px-3 text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
                   >
                     Informacion del Plano
                   </th>
                 </tr>
                 <tr className="bg-muted/20">
-                  {INFO_COLUMNS.map((column) => (
+                  {visibleInfoColumns.map((column) => (
                     <th
                       key={column.key}
                       className={cn(
-                        "whitespace-nowrap border-r border-b border-border px-2 py-2 text-left text-[10px] font-semibold text-muted-foreground",
+                        HEADER_SECOND_ROW_H,
+                        "whitespace-nowrap border-r border-b border-border px-2 py-1 text-left text-[10px] font-semibold text-muted-foreground",
                         column.width
                       )}
                     >
@@ -387,30 +589,7 @@ export default function ControlTable({ data = [] }) {
                     key={row.rowKey}
                     className={cn("border-b border-border transition-colors hover:bg-muted/30", ROW_H)}
                   >
-                    <td className="min-w-[120px] whitespace-nowrap border-r border-border px-2 font-mono font-medium text-foreground">
-                      {row.number || "-"}
-                    </td>
-                    <td className="max-w-[220px] truncate border-r border-border px-2 text-foreground">
-                      <span title={row.name || ""}>{row.name || "-"}</span>
-                    </td>
-                    <td className="whitespace-nowrap border-r border-border px-2 text-muted-foreground">
-                      {formatDate(row.plannedGenDate)}
-                    </td>
-                    <td className="whitespace-nowrap border-r border-border px-2 text-muted-foreground">
-                      {formatDate(row.actualGenDate)}
-                    </td>
-                    <td className="whitespace-nowrap border-r border-border px-2 text-muted-foreground">
-                      {formatDate(row.plannedReviewDate)}
-                    </td>
-                    <td className="whitespace-nowrap border-r border-border px-2 text-muted-foreground">
-                      {formatDate(row.actualReviewDate)}
-                    </td>
-                    <td className="whitespace-nowrap border-r border-border px-2 font-medium text-blue-700">
-                      {formatDate(row.plannedIssueDate)}
-                    </td>
-                    <td className="whitespace-nowrap border-r border-border px-2 font-medium text-emerald-700">
-                      {formatDate(row.actualIssueDate)}
-                    </td>
+                    {visibleInfoColumns.map((column) => renderInfoCell(row, column.key))}
                   </tr>
                 ))}
               </tbody>
